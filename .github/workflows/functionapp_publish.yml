@@ -50,6 +50,7 @@ jobs:
             --name tfstate \
             --account-name nordicdemostorageterra
 
+            
   terraform-apply:
     needs: [deploy-terraform-infra]
     name: 'Terraform Apply'
@@ -73,9 +74,7 @@ jobs:
     - name: Login to Azure
       uses: azure/login@v1
       with:
-        client-id: ${{ secrets.AZURE_CLIENTID }}
-        tenant-id: ${{ secrets.AZURE_TENANTID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
     - name: Terraform init
