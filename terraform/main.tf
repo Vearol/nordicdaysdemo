@@ -180,7 +180,7 @@ resource "azurerm_linux_function_app" "nordicdaysdemo-functionapp-terra" {
     "FUNCTIONS_WORKER_RUNTIME"              = "dotnet"
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.app-insights.connection_string
     "AzureWebJobsStorage"                   = azurerm_storage_account.storage.primary_connection_string
-    "KeyVaultName"                          = "nordicdaysdemo-kv-terra"
+    "KeyVaultName"                          = azurerm_key_vault.keyvault.name
     "ServiceBusConnection"                  = azurerm_servicebus_namespace_authorization_rule.functionapp-listen.primary_connection_string
   }
 }
