@@ -80,10 +80,6 @@ resource "azurerm_cosmosdb_sql_container" "db_container" {
     excluded_path {
       path = "/\"_etag\"/?"
     }
-  }  
-
-  unique_key {
-    paths = []
   }
 }
 
