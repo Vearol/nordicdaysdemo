@@ -74,12 +74,18 @@ jobs:
     - name: Login to Azure
       uses: azure/login@v1
       with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        client-id: ${{ secrets.AZURE_CLIENTID }}
+        tenant-id: ${{ secrets.AZURE_TENANTID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
 
     # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
     - name: Terraform init
       working-directory: terraform
-      run: terraform init    
+      run: export ARM_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+        export ARM_CLIENT_SECRET="12345678-0000-0000-0000-000000000000"
+        export ARM_TENANT_ID="10000000-0000-0000-0000-000000000000"
+        export ARM_SUBSCRIPTION_ID="20000000-0000-0000-0000-000000000000"
+        terraform init
      
     # Terraform Apply
     - name: Terraform Apply
