@@ -16,17 +16,19 @@ jobs:
 
       - name: Deploy state bucket
         run: |
+          set -a 
+          source .env.backend
           az login --service-principal \
             -u ${{ secrets.AZURE_CLIENTID }} \
             -p ${{ secrets.AZURE_TENANTID }} \
             --tenant ${{ secrets.AZURE_SUBSCRIPTIONID }}
           az group create \
-            -l $AZURE_LOCATION \
+            -l $STATE_RESOURCE_GROUP_LOCATION \
             -n $STATE_RESOURCE_GROUP_NAME
           az storage account create \
             -n $STATE_STORAGE_ACCOUNT_NAME \
             -g $STATE_RESOURCE_GROUP_NAME \
-            -l $AZURE_LOCATION \
+            -l $STATE_RESOURCE_GROUP_LOCATION \
             --sku Standard_LRS \
             --allow-blob-public-access false
           az storage container create \
