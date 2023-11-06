@@ -81,11 +81,7 @@ jobs:
     # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
     - name: Terraform init
       working-directory: terraform
-      run: export ARM_CLIENT_ID="00000000-0000-0000-0000-000000000000"
-        export ARM_CLIENT_SECRET="12345678-0000-0000-0000-000000000000"
-        export ARM_TENANT_ID="10000000-0000-0000-0000-000000000000"
-        export ARM_SUBSCRIPTION_ID="20000000-0000-0000-0000-000000000000"
-        terraform init
+      run: terraform init
      
     # Terraform Apply
     - name: Terraform Apply
