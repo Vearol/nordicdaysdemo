@@ -4,15 +4,15 @@ data "azurerm_client_config" "current" {
 # ----------------------- Resource Group ------------------------ 
 
 resource "azurerm_resource_group" "resource_group" {
-  name     = "nordic-days-demo-terra2"
+  name     = "nordic-days-demo-terra"
   location = "North Europe"
-  tags     = { "Env" = "NonProd" }
+  tags = { "Env" = "NonProd" }
 }
 
 # ----------------------- Storage ------------------------ 
 
 resource "azurerm_storage_account" "storage" {
-  name                     = "nordicdemostorageterra2"
+  name                     = "nordicdemostorageterra"
   resource_group_name      = azurerm_resource_group.resource_group.name
   location                 = azurerm_resource_group.resource_group.location
   account_tier             = "Standard"
@@ -22,7 +22,7 @@ resource "azurerm_storage_account" "storage" {
 # ----------------------- App Service Plan ------------------------ 
 
 resource "azurerm_service_plan" "plan" {
-  name                = "nordicdaysdemo-plan-terra2"
+  name                = "nordicdaysdemo-plan-terra"
   location            = azurerm_resource_group.resource_group.location
   resource_group_name = azurerm_resource_group.resource_group.name
   os_type             = "Linux"
@@ -32,7 +32,7 @@ resource "azurerm_service_plan" "plan" {
 # ----------------------- Cosmos Db ------------------------ 
 
 resource "azurerm_cosmosdb_account" "db_account" {
-  name                = "nordicdaysdemo-db-terra2"
+  name                = "nordicdaysdemo-db-terra"
   location            = azurerm_resource_group.resource_group.location
   resource_group_name = azurerm_resource_group.resource_group.name
   offer_type          = "Standard"
@@ -86,14 +86,14 @@ resource "azurerm_cosmosdb_sql_container" "db_container" {
 # ----------------------- Key Vault ------------------------ 
 
 resource "azurerm_key_vault" "keyvault" {
-  name                        = "nordicdaysdemo-kv-terra2"
+  name                        = "nordicdaysdemo-kv-terra"
   location                    = azurerm_resource_group.resource_group.location
   resource_group_name         = azurerm_resource_group.resource_group.name
   enabled_for_disk_encryption = true
   tenant_id                   = data.azurerm_client_config.current.tenant_id
   soft_delete_retention_days  = 7
   purge_protection_enabled    = false
-  sku_name                    = "standard"
+  sku_name = "standard"
 }
 
 resource "azurerm_key_vault_access_policy" "functionapp-access-policy" {
@@ -112,7 +112,7 @@ resource "azurerm_key_vault_access_policy" "deploy-access-policy" {
   object_id    = data.azurerm_client_config.current.object_id
 
   secret_permissions = [
-    "Get", "Set", "List"
+    "Get", "Set", "List", "Delete"
   ]
 }
 
@@ -125,7 +125,7 @@ resource "azurerm_key_vault_secret" "database_key" {
 # ----------------------- Service Bus ------------------------ 
 
 resource "azurerm_servicebus_namespace" "servicebus" {
-  name                = "nordicdaysdemo-sb-terra2"
+  name                = "nordicdaysdemo-sb-terra"
   location            = azurerm_resource_group.resource_group.location
   resource_group_name = azurerm_resource_group.resource_group.name
   sku                 = "Standard"
@@ -150,7 +150,7 @@ resource "azurerm_servicebus_namespace_authorization_rule" "functionapp-listen" 
 resource "azurerm_application_insights" "app-insights" {
   application_type    = "web"
   location            = azurerm_resource_group.resource_group.location
-  name                = "nordicdemo-appinsights-terra2"
+  name                = "nordicdemo-appinsights-terra"
   resource_group_name = azurerm_resource_group.resource_group.name
 }
 
@@ -163,7 +163,7 @@ resource "azurerm_linux_function_app" "nordicdaysdemo-functionapp-terra" {
 
   storage_account_name       = azurerm_storage_account.storage.name
   storage_account_access_key = azurerm_storage_account.storage.primary_access_key
-  name                       = "nordicdemo-functionapp-terra2"
+  name                       = "nordicdemo-functionapp-terra"
 
   site_config {
     application_stack {
@@ -173,14 +173,14 @@ resource "azurerm_linux_function_app" "nordicdaysdemo-functionapp-terra" {
 
   identity {
     type = "SystemAssigned"
-  }
+  }  
 
   app_settings = {
     "FUNCTIONS_EXTENSION_VERSION"           = "~4"
     "FUNCTIONS_WORKER_RUNTIME"              = "dotnet"
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.app-insights.connection_string
     "AzureWebJobsStorage"                   = azurerm_storage_account.storage.primary_connection_string
-    "KeyVaultName"                          = "nordicdaysdemo-kv-terra2"
+    "KeyVaultName"                          = "nordicdaysdemo-kv-terra"
     "ServiceBusConnection"                  = azurerm_servicebus_namespace_authorization_rule.functionapp-listen.primary_connection_string
   }
 }
