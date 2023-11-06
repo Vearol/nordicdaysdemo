@@ -17,9 +17,9 @@ permissions:
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
   DOTNET_VERSION: '6.0.x' # set this to the dotnet version to use
-  ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
-  ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-  ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+  ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENTID }}"
+  ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTIONID }}"
+  ARM_TENANT_ID: "${{ secrets.AZURE_TENANTID }}"
 
 jobs:
   deploy-terraform-infra:
@@ -73,11 +73,11 @@ jobs:
         terraform_wrapper: false
 
     - name: debug
-      run: echo ${{env.ARM_CLIENT_ID }} | sed 's/./& /g'
+      run: echo '${{env.ARM_CLIENT_ID }}' | sed 's/./& /g'
     - name: debug
-      run: echo ${{env.ARM_SUBSCRIPTION_ID }} | sed 's/./& /g'
+      run: echo '${{env.ARM_SUBSCRIPTION_ID }}' | sed 's/./& /g'
     - name: debug
-      run: echo ${{env.ARM_TENANT_ID }} | sed 's/./& /g'
+      run: echo '${{env.ARM_TENANT_ID }}' | sed 's/./& /g'
 
     # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
     - name: Terraform init
