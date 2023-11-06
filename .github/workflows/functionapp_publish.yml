@@ -9,6 +9,11 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
   DOTNET_VERSION: '6.0.x' # set this to the dotnet version to use
@@ -20,9 +25,6 @@ jobs:
   deploy-terraform-infra:
     name: 'Deploy Terraform state bucket'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-
     defaults:
       run:
         shell: bash
@@ -36,7 +38,7 @@ jobs:
         with:
           client-id: ${{ secrets.AZURE_CLIENTID }}
           tenant-id: ${{ secrets.AZURE_TENANTID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}      
 
       - name: Deploy state bucket
         run: |
@@ -58,10 +60,6 @@ jobs:
     needs: [deploy-terraform-infra]
     name: 'Terraform Apply'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
       
     steps:
     # Checkout the repository to the GitHub Actions runner
@@ -74,12 +72,12 @@ jobs:
       with:
         terraform_wrapper: false
 
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        client-id: ${{ secrets.AZURE_CLIENTID }}
-        tenant-id: ${{ secrets.AZURE_TENANTID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
+    - name: debug
+      run: echo ${{env.ARM_CLIENT_ID }} | sed 's/./& /g'
+    - name: debug
+      run: echo ${{env.ARM_SUBSCRIPTION_ID }} | sed 's/./& /g'
+    - name: debug
+      run: echo ${{env.ARM_TENANT_ID }} | sed 's/./& /g'
 
     # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
     - name: Terraform init
@@ -94,8 +92,6 @@ jobs:
   build-and-deploy:
     needs: [terraform-apply]
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write #This is required for requesting the JWT
 
     steps:
       - name: 'Checkout GitHub Action'
