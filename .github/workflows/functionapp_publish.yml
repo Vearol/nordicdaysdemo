@@ -14,40 +14,6 @@ env:
   DOTNET_VERSION: '6.0.x' # set this to the dotnet version to use
 
 jobs:
-  setup-deploy-infra:
-    name: 'Deploy Terraform state bucket'
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Deploy state bucket
-        run: |
-          set -a 
-          source .env.backend
-          az login --service-principal \
-            -u ${{ secrets.AZURE_CLIENTID }} \
-            -p ${{ secrets.AZURE_TENANTID }} \
-            --tenant ${{ secrets.AZURE_SUBSCRIPTIONID }}
-          az group create \
-            -l $AZURE_LOCATION \
-            -n $STATE_RESOURCE_GROUP_NAME
-          az storage account create \
-            -n $STATE_STORAGE_ACCOUNT_NAME \
-            -g $STATE_RESOURCE_GROUP_NAME \
-            -l $AZURE_LOCATION \
-            --sku Standard_LRS \
-            --allow-blob-public-access false
-          az storage container create \
-            --name tfstate \
-            --account-name $STATE_STORAGE_ACCOUNT_NAME
-            
-
   terraform-apply:
     name: 'Terraform Apply'
     runs-on: ubuntu-latest

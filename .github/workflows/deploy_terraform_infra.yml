@@ -8,23 +8,28 @@ jobs:
   deploy-terraform-infra:
     name: 'Deploy Terraform state bucket'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
 
     defaults:
       run:
         shell: bash
-
+      
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENTID }}
+          tenant-id: ${{ secrets.AZURE_TENANTID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
 
       - name: Deploy state bucket
         run: |
           set -a 
           source .env
-          az login --service-principal \
-            -u ${{ secrets.AZURE_CLIENTID }} \
-            -p ${{ secrets.AZURE_TENANTID }} \
-            --tenant ${{ secrets.AZURE_SUBSCRIPTIONID }}
           az group create \
             -l $STATE_RESOURCE_GROUP_LOCATION \
             -n $STATE_RESOURCE_GROUP_NAME
