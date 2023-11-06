@@ -47,6 +47,7 @@ jobs:
      
     # Terraform Apply
     - name: Terraform Apply
+      working-directory: terraform
       run: terraform apply -auto-approve
 
   build-and-deploy:
