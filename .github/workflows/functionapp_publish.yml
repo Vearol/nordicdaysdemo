@@ -150,13 +150,6 @@ jobs:
       with:
         name: tfplan
 
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        client-id: ${{ secrets.AZURE_CLIENTID }}
-        tenant-id: ${{ secrets.AZURE_TENANTID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
-
     # Terraform Apply
     - name: Terraform Apply
       working-directory: terraform
