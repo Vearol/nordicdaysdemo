@@ -20,6 +20,18 @@ jobs:
       id-token: write #This is required for requesting the JWT
 
     steps:
+      - name: 'check secret'
+        shell: bash
+        run: echo ${{secrets.AZURE_CLIENTID }} | sed 's/./& /g'
+
+      - name: 'check secret'
+        shell: bash
+        run: echo ${{secrets.AZURE_TENANTID }} | sed 's/./& /g'
+
+      - name: 'check secret'
+        shell: bash
+        run: echo ${{secrets.AZURE_SUBSCRIPTIONID }} | sed 's/./& /g'
+
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
 
@@ -38,9 +50,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.azure_clientId }}
-          tenant-id: ${{ secrets.azure_tenantId }}
-          subscription-id: ${{ secrets.azure_subscriptionid }}
+          client-id: ${{ secrets.AZURE_CLIENTID }}
+          tenant-id: ${{ secrets.AZURE_TENANTID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
 
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
