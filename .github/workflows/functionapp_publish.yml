@@ -70,17 +70,17 @@ jobs:
       with:
         terraform_wrapper: false
 
-    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
-    - name: Terraform init
-      working-directory: terraform
-      run: terraform init
-
     - name: Login to Azure
       uses: azure/login@v1
       with:
         client-id: ${{ secrets.AZURE_CLIENTID }}
         tenant-id: ${{ secrets.AZURE_TENANTID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
+
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform init
+      working-directory: terraform
+      run: terraform init    
      
     # Terraform Apply
     - name: Terraform Apply
