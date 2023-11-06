@@ -17,7 +17,7 @@ jobs:
       - name: Deploy state bucket
         run: |
           set -a 
-          source .env.backend
+          source .env
           az login --service-principal \
             -u ${{ secrets.AZURE_CLIENTID }} \
             -p ${{ secrets.AZURE_TENANTID }} \
