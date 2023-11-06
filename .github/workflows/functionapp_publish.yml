@@ -145,6 +145,7 @@ jobs:
 
 
   build-and-deploy:
+    needs: [terraform-apply]
     runs-on: ubuntu-latest
     permissions:
       id-token: write #This is required for requesting the JWT
