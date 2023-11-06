@@ -82,12 +82,12 @@ jobs:
     # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
     - name: Terraform init
       working-directory: terraform
-      run: terraform init -reconfigure
+      run: terraform init -input=false
      
     # Terraform Apply
     - name: Terraform Apply
       working-directory: terraform
-      run: terraform apply -input=false
+      run: terraform apply -auto-approve
 
   build-and-deploy:
     needs: [terraform-apply]
