@@ -78,6 +78,7 @@ jobs:
         
     # Create string output of Terraform Plan
     - name: Create String Output
+      working-directory: terraform
       id: tf-plan-string
       run: |
         TERRAFORM_PLAN=$(terraform show -no-color tfplan)
@@ -95,13 +96,14 @@ jobs:
         
     # Publish Terraform Plan as task summary
     - name: Publish Terraform Plan to Task Summary
+      working-directory: terraform
       env:
         SUMMARY: ${{ steps.tf-plan-string.outputs.summary }}
       run: |
         echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
       
     # If this is a PR post the changes
-    - name: Push Terraform Output to PR
+    - name: Push Terraform Output to PR      
       if: github.ref != 'refs/heads/main'
       uses: actions/github-script@v6
       env:
