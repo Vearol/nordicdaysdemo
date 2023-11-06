@@ -37,20 +37,18 @@ jobs:
 
       - name: Deploy state bucket
         run: |
-          set -a 
-          source .env
           az group create \
-            -l $TF_VAR_STATE_RESOURCE_GROUP_LOCATION \
-            -n $TF_VAR_STATE_RESOURCE_GROUP_NAME
+            -l northeurope \
+            -n nordic-days-demo-terra
           az storage account create \
-            -n $TF_VAR_STATE_STORAGE_ACCOUNT_NAME \
-            -g $TF_VAR_STATE_RESOURCE_GROUP_NAME \
-            -l $TF_VAR_STATE_RESOURCE_GROUP_LOCATION \
+            -n nordicdemostorageterra \
+            -g nordic-days-demo-terra \
+            -l northeurope \
             --sku Standard_LRS \
             --allow-blob-public-access false
           az storage container create \
             --name tfstate \
-            --account-name $TF_VAR_STATE_STORAGE_ACCOUNT_NAME
+            --account-name nordicdemostorageterra
 
   terraform-apply:
     needs: [deploy-terraform-infra]
@@ -75,10 +73,7 @@ jobs:
     # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
     - name: Terraform init
       working-directory: terraform
-      run: |
-        set -a 
-        source ../.env
-        terraform init
+      run: terraform init
 
     - name: Login to Azure
       uses: azure/login@v1
