@@ -4,7 +4,7 @@ data "azurerm_client_config" "current" {
 # ----------------------- Resource Group ------------------------ 
 
 resource "azurerm_resource_group" "resource_group" {
-  name     = "nordic-days-demo-terra"
+  name     = "nordic-days-demo-terra2"
   location = "North Europe"
   tags     = { "Env" = "NonProd" }
 }
@@ -12,7 +12,7 @@ resource "azurerm_resource_group" "resource_group" {
 # ----------------------- Storage ------------------------ 
 
 resource "azurerm_storage_account" "storage" {
-  name                     = "nordicdemostorageterra"
+  name                     = "nordicdemostorageterra2"
   resource_group_name      = azurerm_resource_group.resource_group.name
   location                 = azurerm_resource_group.resource_group.location
   account_tier             = "Standard"
@@ -22,7 +22,7 @@ resource "azurerm_storage_account" "storage" {
 # ----------------------- App Service Plan ------------------------ 
 
 resource "azurerm_service_plan" "plan" {
-  name                = "nordicdaysdemo-plan-terra"
+  name                = "nordicdaysdemo-plan-terra2"
   location            = azurerm_resource_group.resource_group.location
   resource_group_name = azurerm_resource_group.resource_group.name
   os_type             = "Linux"
@@ -32,7 +32,7 @@ resource "azurerm_service_plan" "plan" {
 # ----------------------- Cosmos Db ------------------------ 
 
 resource "azurerm_cosmosdb_account" "db_account" {
-  name                = "nordicdaysdemo-db-terra"
+  name                = "nordicdaysdemo-db-terra2"
   location            = azurerm_resource_group.resource_group.location
   resource_group_name = azurerm_resource_group.resource_group.name
   offer_type          = "Standard"
@@ -86,7 +86,7 @@ resource "azurerm_cosmosdb_sql_container" "db_container" {
 # ----------------------- Key Vault ------------------------ 
 
 resource "azurerm_key_vault" "keyvault" {
-  name                        = "nordicdaysdemo-kv-terra"
+  name                        = "nordicdaysdemo-kv-terra2"
   location                    = azurerm_resource_group.resource_group.location
   resource_group_name         = azurerm_resource_group.resource_group.name
   enabled_for_disk_encryption = true
@@ -125,7 +125,7 @@ resource "azurerm_key_vault_secret" "database_key" {
 # ----------------------- Service Bus ------------------------ 
 
 resource "azurerm_servicebus_namespace" "servicebus" {
-  name                = "nordicdaysdemo-sb-terra"
+  name                = "nordicdaysdemo-sb-terra2"
   location            = azurerm_resource_group.resource_group.location
   resource_group_name = azurerm_resource_group.resource_group.name
   sku                 = "Standard"
@@ -150,7 +150,7 @@ resource "azurerm_servicebus_namespace_authorization_rule" "functionapp-listen" 
 resource "azurerm_application_insights" "app-insights" {
   application_type    = "web"
   location            = azurerm_resource_group.resource_group.location
-  name                = "nordicdemo-appinsights-terra"
+  name                = "nordicdemo-appinsights-terra2"
   resource_group_name = azurerm_resource_group.resource_group.name
 }
 
@@ -163,7 +163,7 @@ resource "azurerm_linux_function_app" "nordicdaysdemo-functionapp-terra" {
 
   storage_account_name       = azurerm_storage_account.storage.name
   storage_account_access_key = azurerm_storage_account.storage.primary_access_key
-  name                       = "nordicdemo-functionapp-terra"
+  name                       = "nordicdemo-functionapp-terra2"
 
   site_config {
     application_stack {
@@ -180,7 +180,7 @@ resource "azurerm_linux_function_app" "nordicdaysdemo-functionapp-terra" {
     "FUNCTIONS_WORKER_RUNTIME"              = "dotnet"
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.app-insights.connection_string
     "AzureWebJobsStorage"                   = azurerm_storage_account.storage.primary_connection_string
-    "KeyVaultName"                          = "nordicdaysdemo-kv-terra"
+    "KeyVaultName"                          = "nordicdaysdemo-kv-terra2"
     "ServiceBusConnection"                  = azurerm_servicebus_namespace_authorization_rule.functionapp-listen.primary_connection_string
   }
 }
