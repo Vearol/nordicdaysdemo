@@ -40,17 +40,17 @@ jobs:
           set -a 
           source .env
           az group create \
-            -l $STATE_RESOURCE_GROUP_LOCATION \
-            -n $STATE_RESOURCE_GROUP_NAME
+            -l $TF_VAR_STATE_RESOURCE_GROUP_LOCATION \
+            -n $TF_VAR_STATE_RESOURCE_GROUP_NAME
           az storage account create \
-            -n $STATE_STORAGE_ACCOUNT_NAME \
-            -g $STATE_RESOURCE_GROUP_NAME \
-            -l $STATE_RESOURCE_GROUP_LOCATION \
+            -n $TF_VAR_STATE_STORAGE_ACCOUNT_NAME \
+            -g $TF_VAR_STATE_RESOURCE_GROUP_NAME \
+            -l $TF_VAR_STATE_RESOURCE_GROUP_LOCATION \
             --sku Standard_LRS \
             --allow-blob-public-access false
           az storage container create \
             --name tfstate \
-            --account-name $STATE_STORAGE_ACCOUNT_NAME
+            --account-name $TF_VAR_STATE_STORAGE_ACCOUNT_NAME
 
   terraform-apply:
     needs: [deploy-terraform-infra]
