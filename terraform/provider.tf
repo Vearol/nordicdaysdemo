@@ -10,6 +10,7 @@ terraform {
       storage_account_name = "nordicdemostorageterra"
       container_name       = "tfstate"
       key                  = "terraform.tfstate"
+      use_oidc             = true
   }
 
 }

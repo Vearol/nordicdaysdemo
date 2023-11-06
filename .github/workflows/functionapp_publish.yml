@@ -78,7 +78,7 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANTID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
 
-    - name: Deploy state bucket
+    - name: Export storage key
       run: |
         ACCOUNT_KEY=$(az storage account keys list --resource-group nordic-days-demo-terra --account-name nordicdemostorageterra --query '[0].value' -o tsv)
         export ARM_ACCESS_KEY=$ACCOUNT_KEY
