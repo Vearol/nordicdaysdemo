@@ -6,8 +6,8 @@ terraform {
     }
   }
   backend "azurerm" {
-      resource_group_name  = "nordicdays-demo-terra2"
-      storage_account_name = "nordicdemostorageterra2"
+      resource_group_name  = "nordicdays-terra-state"
+      storage_account_name = "nordicdaysterrastate"
       container_name       = "tfstate"
       key                  = "terraform.tfstate"
       use_oidc             = true

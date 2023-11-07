@@ -44,16 +44,16 @@ jobs:
         run: |
           az group create \
             -l northeurope \
-            -n nordicdays-demo-terra2
+            -n nordicdays-terra-state
           az storage account create \
-            -n nordicdemostorageterra2 \
-            -g nordicdays-demo-terra2 \
+            -n nordicdaysterrastate \
+            -g nordicdays-terra-state \
             -l northeurope \
             --sku Standard_LRS \
             --allow-blob-public-access false
           az storage container create \
             --name tfstate \
-            --account-name nordicdemostorageterra2
+            --account-name nordicdaysterrastate
 
             
   terraform-apply:
