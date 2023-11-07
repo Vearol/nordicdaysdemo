@@ -44,16 +44,16 @@ jobs:
         run: |
           az group create \
             -l northeurope \
-            -n nordic-days-demo-terra
+            -n nordicdays-demo-terra2
           az storage account create \
-            -n nordicdemostorageterra \
-            -g nordic-days-demo-terra \
+            -n nordicdemostorageterra2 \
+            -g nordicdays-demo-terra2 \
             -l northeurope \
             --sku Standard_LRS \
             --allow-blob-public-access false
           az storage container create \
             --name tfstate \
-            --account-name nordicdemostorageterra
+            --account-name nordicdemostorageterra2
 
             
   terraform-apply:
@@ -72,17 +72,10 @@ jobs:
       with:
         terraform_wrapper: false
 
-    - name: debug
-      run: echo '${{env.ARM_CLIENT_ID }}' | sed 's/./& /g'
-    - name: debug
-      run: echo '${{env.ARM_SUBSCRIPTION_ID }}' | sed 's/./& /g'
-    - name: debug
-      run: echo '${{env.ARM_TENANT_ID }}' | sed 's/./& /g'
-
     # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
     - name: Terraform init
       working-directory: terraform
-      run: terraform init -force-copy
+      run: terraform init
      
     # Terraform Apply
     - name: Terraform Apply
