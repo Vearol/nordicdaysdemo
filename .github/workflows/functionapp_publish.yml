@@ -113,7 +113,7 @@ jobs:
         uses: Azure/functions-action@v1
         id: fa
         with:
-          app-name: 'nordicdemo-functionapp-terra'
+          app-name: 'nordicdemo-functionapp-terra2'
           slot-name: 'production'
           package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
         
