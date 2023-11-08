@@ -52,6 +52,11 @@ namespace NordicDaysDemo
                             { ContainerId = unzipMessage.ContainerId, BlobName = unzippedFile, PartitionKey = report.CreationDay}));
                     }
                 }
+                else
+                {
+                    await queueClient.SendMessageAsync(JsonSerializer.Serialize(new LogAnalysisMessage
+                        { ContainerId = unzipMessage.ContainerId, BlobName = blobItem.Name, PartitionKey = report.CreationDay }));
+                }
             }
         }
 

@@ -20,6 +20,9 @@ env:
   ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENTID }}"
   ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTIONID }}"
   ARM_TENANT_ID: "${{ secrets.AZURE_TENANTID }}"
+  TF_STATE_LOCATION: 'northeurope'
+  TF_STATE_RG: 'nordicdays-terra-state'
+  TF_STATE_STORAGE: 'nordicdaysterrastate'
 
 jobs:
   deploy-terraform-infra:
@@ -43,17 +46,17 @@ jobs:
       - name: Deploy state bucket
         run: |
           az group create \
-            -l northeurope \
-            -n nordicdays-terra-state
+            -l ${{ env.TF_STATE_LOCATION }} \
+            -n ${{ env.TF_STATE_RG }}
           az storage account create \
-            -n nordicdaysterrastate \
-            -g nordicdays-terra-state \
-            -l northeurope \
+            -n ${{ env.TF_STATE_STORAGE }} \
+            -g ${{ env.TF_STATE_RG }} \
+            -l ${{ env.TF_STATE_LOCATION }} \
             --sku Standard_LRS \
             --allow-blob-public-access false
           az storage container create \
             --name tfstate \
-            --account-name nordicdaysterrastate
+            --account-name ${{ env.TF_STATE_STORAGE }}
 
             
   terraform-apply:

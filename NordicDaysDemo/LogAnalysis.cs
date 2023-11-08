@@ -25,10 +25,23 @@ namespace NordicDaysDemo
         public async Task Run([QueueTrigger("log-analysis", Connection = "AzureWebJobsStorage")] LogAnalysisMessage logAnalysisMessage, 
             ILogger log)
         {
-            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+            var storageConnectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
 
-            var blobServiceClient = new BlobServiceClient(connectionString);
+            var blobServiceClient = new BlobServiceClient(storageConnectionString);
             var containerClient = blobServiceClient.GetBlobContainerClient(logAnalysisMessage.ContainerId);
+
+            var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
+            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
+            var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+            var dbConnectionString = (await client.GetSecretAsync("database-key")).Value.Value;
+
+            var cosmosClient = new CosmosClient(dbConnectionString, new CosmosClientOptions()
+            {
+                ApplicationRegion = Regions.NorthEurope,
+            });
+
+            var container = cosmosClient.GetContainer("feedback", "reports");
+
 
             log.Log(LogLevel.Information, $"blob name: {logAnalysisMessage.BlobName}");
 
@@ -60,51 +73,14 @@ namespace NordicDaysDemo
                 await resultBlobClient.UploadAsync(stream, true);
 
                 log.Log(LogLevel.Information, "upload completed");
-
-                var report = await ReadCosmosDbDocument(logAnalysisMessage.ContainerId, logAnalysisMessage.PartitionKey);
-                report.Status = ReportStatus.Analyzed;
-                await UpdateCosmosDbDocument(report);
             }
-        }
 
-        private async Task<Report> ReadCosmosDbDocument(string id, int partitionKey)
-        {
-            var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
-            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
-            var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+            var report = (await container.ReadItemAsync<Report>(id: logAnalysisMessage.ContainerId,
+                partitionKey: new PartitionKey(logAnalysisMessage.PartitionKey))).Resource;
 
-            var connectionString = (await client.GetSecretAsync("database-key")).Value.Value;
+            report.Status = ReportStatus.Analyzed;
 
-            var cosmosClient = new CosmosClient(connectionString, new CosmosClientOptions()
-            {
-                ApplicationRegion = Regions.NorthEurope,
-            });
-
-            var container = cosmosClient.GetContainer("feedback", "reports");
-
-            return await container.ReadItemAsync<Report>(id: id, new PartitionKey(partitionKey));
-        }
-
-        private async Task UpdateCosmosDbDocument(Report report)
-        {
-            var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
-            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
-            var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
-
-            var connectionString = (await client.GetSecretAsync("database-key")).Value.Value;
-
-            var cosmosClient = new CosmosClient(connectionString, new CosmosClientOptions()
-            {
-                ApplicationRegion = Regions.NorthEurope,
-            });
-
-            var container = cosmosClient.GetContainer("feedback", "reports");
-            
-            await container.ReplaceItemAsync(
-                item: report,
-                partitionKey: new PartitionKey(report.CreationDay),
-                id: report.id
-            );
+            await container.ReplaceItemAsync(report, report.id, partitionKey: new PartitionKey(report.CreationDay));
         }
     }
 }
