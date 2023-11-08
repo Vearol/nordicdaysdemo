@@ -2,7 +2,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = ">= 3.7.0"
+      version = ">= 3.79.0"
     }
   }
   backend "azurerm" {
@@ -72,7 +72,7 @@ resource "azurerm_cosmosdb_account" "db_account" {
 }
 
 resource "azurerm_cosmosdb_sql_database" "database" {
-  name                = "feedback"
+  name                = "reports_metadata"
   resource_group_name = azurerm_resource_group.resource_group.name
   account_name        = azurerm_cosmosdb_account.db_account.name
 }

@@ -91,7 +91,7 @@ namespace NordicDaysDemo
             // Upload unzipped content to the same container in a new directory
             foreach (var filePath in Directory.GetFiles(Path.Combine(tempDirectory, _destinationDirectory)))
             {
-                var destinationBlobName = $"unzipped/{Path.GetFileName(filePath)}";
+                var destinationBlobName = $"{_destinationDirectory}/{Path.GetFileName(filePath)}";
                 var destinationBlobClient = containerClient.GetBlobClient(destinationBlobName);
                 await using var fs = File.OpenRead(filePath);
                 await destinationBlobClient.UploadAsync(fs, true);
@@ -118,7 +118,7 @@ namespace NordicDaysDemo
                     ApplicationRegion = Regions.NorthEurope,
                 });
 
-            var container = cosmosClient.GetContainer("feedback", "reports");
+            var container = cosmosClient.GetContainer("reports_metadata", "reports");
 
             var report = new Report() { id = containerId, Status = ReportStatus.Created, CreationDay = GetCreationDay() };
 

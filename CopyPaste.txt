@@ -1,0 +1,751 @@
+Azure subscription:
+Azure free account
+https://azure.microsoft.com/en-us/pricing/offers/ms-azr-0044p/
+
+
+https://github.com/Vearol/nordicdaysdemo
+
+
+1. UnzipMessage
+
+public class UnzipMessage
+{
+    public string ContainerId { get; set; }
+}
+
+var unzipMessage = JsonSerializer.Deserialize<UnzipMessage>(myQueueItem);
+
+2. Get container Blobs
+
+var blobServiceClient = new BlobServiceClient(connectionString);
+var containerClient = blobServiceClient.GetBlobContainerClient(unzipMessage.ContainerId);
+
+var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+
+await foreach (var blobItem in containerClient.GetBlobsAsync())
+{
+    
+}
+
+if (blobItem.Name.EndsWith(".zip"))
+{} else {}
+
+3. Send queue message
+
+var queueClient = new QueueClient(connectionString, "log-analysis", new QueueClientOptions(){ MessageEncoding = QueueMessageEncoding.Base64 });
+queueClient.CreateIfNotExists();
+
+await queueClient.SendMessageAsync(JsonSerializer.Serialize(new LogAnalysisMessage
+    { ContainerId = unzipMessage.ContainerId, BlobName = blobItem.Name }));
+
+
+4. ChatGPT
+
+> write a code in c# that takes a zip file from Azure Blob Storage container, unzips it and uploads unzipped content back in the same container, in a new directory
+
+using System;
+using System.IO;
+using System.IO.Compression;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Define your Azure Blob Storage connection string and container name
+        string connectionString = "your_connection_string";
+        string containerName = "your_container_name";
+        string blobName = "your_zip_file_name.zip";
+        string destinationDirectory = "unzipped"; // The directory where unzipped content will be stored
+
+        // Create a BlobServiceClient
+        BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
+
+        // Get a reference to the container
+        BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+
+        // Get a reference to the blob
+        BlobClient blobClient = containerClient.GetBlobClient(blobName);
+
+        // Download the blob to a MemoryStream
+        BlobDownloadInfo blobDownloadInfo = await blobClient.DownloadAsync();
+        using (MemoryStream memoryStream = new MemoryStream())
+        {
+            await blobDownloadInfo.Content.CopyToAsync(memoryStream);
+
+            // Create a temporary directory to unzip the content
+            string tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempDirectory);
+
+            // Unzip the content
+            using (ZipArchive zipArchive = new ZipArchive(memoryStream, ZipArchiveMode.Read))
+            {
+                foreach (ZipArchiveEntry entry in zipArchive.Entries)
+                {
+                    string destinationPath = Path.Combine(tempDirectory, destinationDirectory, entry.FullName);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+
+                    using (Stream entryStream = entry.Open())
+                    using (FileStream fileStream = new FileStream(destinationPath, FileMode.Create))
+                    {
+                        await entryStream.CopyToAsync(fileStream);
+                    }
+                }
+            }
+
+            // Upload unzipped content to the same container in a new directory
+            foreach (string filePath in Directory.GetFiles(Path.Combine(tempDirectory, destinationDirectory)))
+            {
+                string destinationBlobName = Path.Combine("new_directory", Path.GetFileName(filePath));
+                BlobClient destinationBlobClient = containerClient.GetBlobClient(destinationBlobName);
+                await using FileStream fs = File.OpenRead(filePath);
+                await destinationBlobClient.UploadAsync(fs, true);
+            }
+
+            // Clean up: Delete the temporary directory
+            Directory.Delete(tempDirectory, true);
+        }
+
+        Console.WriteLine("Unzipped content uploaded to the Azure Blob Storage container.");
+    }
+}
+
+after refactor
+
+        private async Task<List<string>> UnzipAndUploadBlob(BlobContainerClient containerClient, string blobName)
+        {
+            var blobClient = containerClient.GetBlobClient(blobName);
+
+            BlobDownloadInfo blobDownloadInfo = await blobClient.DownloadAsync();
+            using var memoryStream = new MemoryStream();
+            await blobDownloadInfo.Content.CopyToAsync(memoryStream);
+
+            // Create a temporary directory to unzip the content
+            var tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempDirectory);
+
+            // Unzip the content
+            using (var zipArchive = new ZipArchive(memoryStream, ZipArchiveMode.Read))
+            {
+                foreach (var entry in zipArchive.Entries)
+                {
+                    var destinationPath = Path.Combine(tempDirectory, _destinationDirectory, entry.FullName);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+
+                    await using var entryStream = entry.Open();
+                    await using var fileStream = new FileStream(destinationPath, FileMode.Create);
+                    await entryStream.CopyToAsync(fileStream);
+                }
+            }
+
+            var outputFiles = new List<string>();
+
+            // Upload unzipped content to the same container in a new directory
+            foreach (var filePath in Directory.GetFiles(Path.Combine(tempDirectory, _destinationDirectory)))
+            {
+                var destinationBlobName = $"unzipped/{Path.GetFileName(filePath)}";
+                var destinationBlobClient = containerClient.GetBlobClient(destinationBlobName);
+                await using var fs = File.OpenRead(filePath);
+                await destinationBlobClient.UploadAsync(fs, true);
+
+                outputFiles.Add(destinationBlobName);
+            }
+
+            // Clean up: Delete the temporary directory
+            Directory.Delete(tempDirectory, true);
+
+            return outputFiles;
+        }
+
+usage
+
+                    var unzippedFiles = await UnzipAndUploadBlob(containerClient, blobItem.Name);
+
+                    foreach (var unzippedFile in unzippedFiles)
+                    {
+                        await queueClient.SendMessageAsync(JsonSerializer.Serialize(new LogAnalysisMessage 
+                            { ContainerId = unzipMessage.ContainerId, BlobName = unzippedFile}));
+                    }
+
+5. Save to Db
+
+var cosmosClient = new CosmosClient(connectionString, new CosmosClientOptions() { ApplicationRegion = Regions.NorthEurope });
+var container = cosmosClient.GetContainer("report_metadata", "reports");
+
+6. Key Vault
+
+var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
+var kvUri = "https://" + keyVaultName + ".vault.azure.net";
+var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+
+7. Create Report
+
+    public enum ReportStatus
+    {
+        Unknown,
+        Created,
+        Analyzed
+    }
+
+    public class Report
+    {
+        public string id { get; set; }
+        public ReportStatus Status { get; set; }
+        public int CreationDay { get; set; }
+    }
+
+        private int GetCreationDay()
+        {
+            var dateTime = DateTime.Now;
+            var calendar = CultureInfo.InvariantCulture.Calendar;
+
+            var year = calendar.GetYear(dateTime);
+            var month = calendar.GetMonth(dateTime);
+            var day = calendar.GetDayOfMonth(dateTime);
+            return year * 10000 + month * 100 + day; // YYYYMMDD
+        }
+
+ready method:
+
+        private async Task<Report> SaveCosmosDbDocument(string containerId)
+        {
+            var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
+            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
+            var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+
+            var connectionString = (await client.GetSecretAsync("database-key")).Value.Value;
+
+            var cosmosClient = new CosmosClient(connectionString, new CosmosClientOptions()
+                {
+                    ApplicationRegion = Regions.NorthEurope,
+                });
+
+            var container = cosmosClient.GetContainer("feedback", "reports");
+
+            var report = new Report() { id = containerId, Status = ReportStatus.Created, CreationDay = GetCreationDay() };
+
+            return await container.CreateItemAsync(
+                item: report,
+                partitionKey: new PartitionKey(report.CreationDay)
+            );
+        }
+
+8. Log analysis - create function
+
+9. Queue message
+
+public class LogAnalysisMessage
+    {
+        public string ContainerId { get; set; }
+        public string BlobName { get; set; }
+    }
+
+10. chatGPT 
+
+> write a code in c# where you read a file from azure blob storage line by line
+
+using System;
+using System.IO;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Define your Azure Blob Storage connection string and blob information
+        string connectionString = "your_connection_string";
+        string containerName = "your_container_name";
+        string blobName = "your_blob_name.txt"; // Replace with the name of your blob file
+
+        // Create a BlobServiceClient
+        BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
+
+        // Get a reference to the container
+        BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+
+        // Get a reference to the blob
+        BlobClient blobClient = containerClient.GetBlobClient(blobName);
+
+        // Download the blob to a stream
+        BlobDownloadInfo blobDownloadInfo = await blobClient.DownloadAsync();
+        Stream blobStream = blobDownloadInfo.Content;
+
+        // Read the blob content line by line
+        using (StreamReader reader = new StreamReader(blobStream))
+        {
+            string line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                Console.WriteLine(line); // Process each line as needed
+            }
+        }
+    }
+}
+
+11. chatGPT
+
+> write a c# code that takes a list of string lines, and uploads it to azure blob storage as a new file
+
+using System;
+using System.Collections.Generic;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Define your Azure Blob Storage connection string, container name, and the list of string lines
+        string connectionString = "your_connection_string";
+        string containerName = "your_container_name";
+        List<string> lines = new List<string>
+        {
+            "Line 1",
+            "Line 2",
+            "Line 3",
+            // Add your lines here
+        };
+
+        // Create a BlobServiceClient
+        BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
+
+        // Get a reference to the container
+        BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+
+        // Define the name of the new blob file
+        string blobName = "new_blob_file.txt"; // Change the name as needed
+
+        // Upload the list of string lines as a new blob file
+        BlobClient blobClient = containerClient.GetBlobClient(blobName);
+
+        using (MemoryStream stream = new MemoryStream())
+        using (StreamWriter writer = new StreamWriter(stream))
+        {
+            foreach (string line in lines)
+            {
+                writer.WriteLine(line);
+            }
+            writer.Flush();
+            stream.Position = 0;
+
+            await blobClient.UploadAsync(stream, true);
+        }
+
+        Console.WriteLine("List of string lines uploaded to Azure Blob Storage as a new file.");
+    }
+}
+
+12. combined and refactored piece
+
+            // Read the blob content line by line
+            using var reader = new StreamReader(blobStream);
+            string line;
+
+            var resultBlobClient = containerClient.GetBlobClient("log-analysis-result.txt");
+
+            using (var stream = new MemoryStream())
+            using (var writer = new StreamWriter(stream))
+            {
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (line.Contains("error", StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        writer.WriteLine(line);
+                    }
+                }
+                writer.Flush();
+                stream.Position = 0;
+
+                await resultBlobClient.UploadAsync(stream, true);
+
+                log.Log(LogLevel.Information, "upload completed");
+            }
+
+
+13. Save to db
+
+copypaste old keyvault connection string 
+
+            var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
+            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
+            var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+            var dbConnectionString = (await client.GetSecretAsync("database-key")).Value.Value;
+
+read and rewrite document
+
+            var cosmosClient = new CosmosClient(dbConnectionString, new CosmosClientOptions()
+            {
+                ApplicationRegion = Regions.NorthEurope,
+            });
+
+            var container = cosmosClient.GetContainer("reports_metadata", "reports");
+
+            var report = (await container.ReadItemAsync<Report>(id: logAnalysisMessage.ContainerId)).Resource;
+
+            report.Status = ReportStatus.Analyzed;
+
+            await container.ReplaceItemAsync(report, report.id, partitionKey: new PartitionKey(report.CreationDay));
+
+14. Add partition key 
+
+public int PartitionKey { get; set; }
+
+15. Test with message
+
+{"ContainerId": "test"}
+
+Deploy to Azure: Compute(App Service Plan) + FunctionApp
+
+16. GitHub actions and Terraform Infrastructure as a code
+
+https://developer.hashicorp.com/terraform/downloads
+
+Terraform format, validate, init, plan, apply
+
+example with the storage
+
+17. Local deploy
+
+https://github.com/maximivanov/deploy-azure-functions-with-terraform/blob/main/terraform/main.tf
+
+az login 
+
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 3.79.0"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+}
+
+18. Terraform config
+
+# ----------------------- Resource Group ------------------------ 
+
+resource "azurerm_resource_group" "resource_group" {
+  name     = "nordicdays-demo-terra2"
+  location = "North Europe"
+  tags = { "Env" = "NonProd" }
+}
+
+# ----------------------- Storage ------------------------ 
+
+resource "azurerm_storage_account" "storage" {
+  name                     = "nordicdemostorageterra2"
+  resource_group_name      = azurerm_resource_group.resource_group.name
+  location                 = azurerm_resource_group.resource_group.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+# ----------------------- App Service Plan ------------------------ 
+
+resource "azurerm_service_plan" "plan" {
+  name                = "nordicdaysdemo-plan-terra2"
+  location            = azurerm_resource_group.resource_group.location
+  resource_group_name = azurerm_resource_group.resource_group.name
+  os_type             = "Linux"
+  sku_name            = "S1"
+}
+
+# ----------------------- Cosmos Db ------------------------ 
+
+resource "azurerm_cosmosdb_account" "db_account" {
+  name                = "nordicdaysdemo-db-terra2"
+  location            = azurerm_resource_group.resource_group.location
+  resource_group_name = azurerm_resource_group.resource_group.name
+  offer_type          = "Standard"
+  kind                = "GlobalDocumentDB"
+
+  consistency_policy {
+    consistency_level       = "Session"
+    max_interval_in_seconds = 5
+    max_staleness_prefix    = 100
+  }
+
+  geo_location {
+    location          = azurerm_resource_group.resource_group.location
+    failover_priority = 0
+  }
+}
+
+resource "azurerm_cosmosdb_sql_database" "database" {
+  name                = "reports_metadata"
+  resource_group_name = azurerm_resource_group.resource_group.name
+  account_name        = azurerm_cosmosdb_account.db_account.name
+}
+
+resource "azurerm_cosmosdb_sql_container" "db_container" {
+  name                  = "reports"
+  resource_group_name   = azurerm_resource_group.resource_group.name
+  account_name          = azurerm_cosmosdb_account.db_account.name
+  database_name         = azurerm_cosmosdb_sql_database.database.name
+  partition_key_path    = "/CreationDay"
+  partition_key_version = 1
+  throughput            = 400
+
+  conflict_resolution_policy {
+    mode                     = "LastWriterWins"
+    conflict_resolution_path = "/_ts"
+  }
+
+  indexing_policy {
+    indexing_mode = "consistent"
+
+    included_path {
+      path = "/*"
+    }
+
+    excluded_path {
+      path = "/\"_etag\"/?"
+    }
+  }
+}
+
+# ----------------------- Key Vault ------------------------ 
+
+add to the top: data "azurerm_client_config" "current" {}
+
+resource "azurerm_key_vault" "keyvault" {
+  name                        = "nordicdaysdemo-kv-terra2"
+  location                    = azurerm_resource_group.resource_group.location
+  resource_group_name         = azurerm_resource_group.resource_group.name
+  enabled_for_disk_encryption = true
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  soft_delete_retention_days  = 7
+  purge_protection_enabled    = false
+  sku_name = "standard"
+}
+
+resource "azurerm_key_vault_access_policy" "functionapp-access-policy" {
+  key_vault_id = azurerm_key_vault.keyvault.id
+  tenant_id    = data.azurerm_client_config.current.tenant_id
+  object_id    = azurerm_linux_function_app.nordicdaysdemo-functionapp-terra.identity[0].principal_id
+
+  secret_permissions = [
+    "Get"
+  ]
+}
+
+resource "azurerm_key_vault_access_policy" "deploy-access-policy" {
+  key_vault_id = azurerm_key_vault.keyvault.id
+  tenant_id    = data.azurerm_client_config.current.tenant_id
+  object_id    = data.azurerm_client_config.current.object_id
+
+  secret_permissions = [
+    "Get", "Set", "List", "Delete", "Recover", "Restore"
+  ]
+}
+
+resource "azurerm_key_vault_secret" "database_key" {
+  name         = "database-key"
+  value        = azurerm_cosmosdb_account.db_account.primary_sql_connection_string
+  key_vault_id = azurerm_key_vault.keyvault.id
+}
+
+# ----------------------- Service Bus ------------------------ 
+
+resource "azurerm_servicebus_namespace" "servicebus" {
+  name                = "nordicdaysdemo-sb-terra2"
+  location            = azurerm_resource_group.resource_group.location
+  resource_group_name = azurerm_resource_group.resource_group.name
+  sku                 = "Standard"
+}
+
+resource "azurerm_servicebus_queue" "unzip_queue" {
+  name         = "blob-unzip"
+  namespace_id = azurerm_servicebus_namespace.servicebus.id
+}
+
+resource "azurerm_servicebus_namespace_authorization_rule" "functionapp-listen" {
+  name         = "functionapp_auth_rule"
+  namespace_id = azurerm_servicebus_namespace.servicebus.id
+
+  listen = true
+  send   = false
+  manage = false
+}
+
+# ----------------------- Application Insights ------------------------ 
+
+resource "azurerm_application_insights" "app-insights" {
+  application_type    = "web"
+  location            = azurerm_resource_group.resource_group.location
+  name                = "nordicdemo-appinsights-terra2"
+  resource_group_name = azurerm_resource_group.resource_group.name
+}
+
+# ----------------------- Function App ------------------------ 
+
+resource "azurerm_linux_function_app" "nordicdaysdemo-functionapp-terra" {
+  resource_group_name = azurerm_resource_group.resource_group.name
+  service_plan_id     = azurerm_service_plan.plan.id
+  location            = azurerm_resource_group.resource_group.location
+
+  storage_account_name       = azurerm_storage_account.storage.name
+  storage_account_access_key = azurerm_storage_account.storage.primary_access_key
+  name                       = "nordicdemo-functionapp-terra2"
+
+  site_config {
+    application_stack {
+      dotnet_version = "6.0"
+    }
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }  
+
+  app_settings = {
+    "FUNCTIONS_EXTENSION_VERSION"           = "~4"
+    "FUNCTIONS_WORKER_RUNTIME"              = "dotnet"
+    "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.app-insights.connection_string
+    "AzureWebJobsStorage"                   = azurerm_storage_account.storage.primary_connection_string
+    "KeyVaultName"                          = azurerm_key_vault.keyvault.name
+    "ServiceBusConnection"                  = azurerm_servicebus_namespace_authorization_rule.functionapp-listen.primary_connection_string
+  }
+}
+
+19. GitHub Actions and function deploy
+
+Create service principal, and give federated credential to github branch main
+Make it contributor to subscription
+
+./.github/workflows/file.yml
+
+Get yml from FunctionApp Deployment center 
+
+# Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy dotnet core project to Azure Function App - nordicdemo-functionapp-terra
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
+  DOTNET_VERSION: '6.0.x' # set this to the dotnet version to use
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write #This is required for requesting the JWT
+
+    steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v4
+
+      - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: 'Resolve Project Dependencies Using Dotnet'
+        shell: bash
+        run: |
+          pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
+          dotnet build --configuration Release --output ./output
+          popd
+          
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENTID }}
+          tenant-id: ${{ secrets.AZURE_TENANTID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
+
+      - name: 'Run Azure Functions Action'
+        uses: Azure/functions-action@v1
+        id: fa
+        with:
+          app-name: 'nordicdemo-functionapp-terra'
+          slot-name: 'production'
+          package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
+
+          
+20. To run terraform - you must have remote TF State
+    has to be a separate resource group
+
+  TF_STATE_LOCATION: 'northeurope'
+  TF_STATE_RG: 'nordicdays-terra-state'
+  TF_STATE_STORAGE: 'nordicdaysterrastate'
+
+
+deploy-terraform-infra:
+    name: 'Deploy Terraform state bucket'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENTID }}
+          tenant-id: ${{ secrets.AZURE_TENANTID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}      
+
+      - name: Deploy state bucket
+        run: |
+          az group create \
+            -l ${{ env.TF_STATE_LOCATION }} \
+            -n ${{ env.TF_STATE_RG }}
+          az storage account create \
+            -n ${{ env.TF_STATE_STORAGE }} \
+            -g ${{ env.TF_STATE_RG }} \
+            -l ${{ env.TF_STATE_LOCATION }} \
+            --sku Standard_LRS \
+            --allow-blob-public-access false
+          az storage container create \
+            --name tfstate \
+            --account-name ${{ env.TF_STATE_STORAGE }}
+
+
+move permission to the top
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+
+add terraform remote state storage
+
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 3.79.0"
+    }
+  }
+  backend "azurerm" {
+      resource_group_name  = "nordicdays-terra-state"
+      storage_account_name = "nordicdaysterrastate"
+      container_name       = "tfstate"
+      key                  = "terraform.tfstate"
+      use_oidc             = true
+  }
+
+}
+
+provider "azurerm" {
+  features {}
+  use_oidc = true
+}
+

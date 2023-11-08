@@ -29,19 +29,6 @@ namespace NordicDaysDemo
             var blobServiceClient = new BlobServiceClient(storageConnectionString);
             var containerClient = blobServiceClient.GetBlobContainerClient(logAnalysisMessage.ContainerId);
 
-            var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
-            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
-            var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
-            var dbConnectionString = (await client.GetSecretAsync("database-key")).Value.Value;
-
-            var cosmosClient = new CosmosClient(dbConnectionString, new CosmosClientOptions()
-            {
-                ApplicationRegion = Regions.NorthEurope,
-            });
-
-            var container = cosmosClient.GetContainer("feedback", "reports");
-
-
             log.Log(LogLevel.Information, $"blob name: {logAnalysisMessage.BlobName}");
 
             var blobClient = containerClient.GetBlobClient(logAnalysisMessage.BlobName);
@@ -73,6 +60,18 @@ namespace NordicDaysDemo
 
                 log.Log(LogLevel.Information, "upload completed");
             }
+
+            var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
+            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
+            var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+            var dbConnectionString = (await client.GetSecretAsync("database-key")).Value.Value;
+
+            var cosmosClient = new CosmosClient(dbConnectionString, new CosmosClientOptions()
+            {
+                ApplicationRegion = Regions.NorthEurope,
+            });
+
+            var container = cosmosClient.GetContainer("reports_metadata", "reports");
 
             var report = (await container.ReadItemAsync<Report>(id: logAnalysisMessage.ContainerId,
                 partitionKey: new PartitionKey(logAnalysisMessage.PartitionKey))).Resource;
