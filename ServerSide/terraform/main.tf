@@ -74,7 +74,7 @@ resource "azurerm_servicebus_namespace_authorization_rule" "functionapp-listen" 
   namespace_id = azurerm_servicebus_namespace.servicebus.id
 
   listen = true
-  send   = false
+  send   = true
   manage = false
 }
 

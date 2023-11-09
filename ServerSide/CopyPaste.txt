@@ -147,3 +147,248 @@ public class LogAnalysisMessage
         }
     }
 
+3. GitHub workflow
+
+# Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy dotnet core project to Azure Function App - nordicdemo-functionapp-terra
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'ServerSide' # set this to the path to your web app project, defaults to the repository root
+  DOTNET_VERSION: '6.0.x' # set this to the dotnet version to use
+  ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENTID }}"
+  ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTIONID }}"
+  ARM_TENANT_ID: "${{ secrets.AZURE_TENANTID }}"
+  TF_STATE_LOCATION: 'northeurope'
+  TF_STATE_RG: 'nordicdays-terra-state3'
+  TF_STATE_STORAGE: 'nordicdaysterrastate3'
+
+jobs:
+  deploy-terraform-infra:
+    name: 'Deploy Terraform state bucket'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENTID }}
+          tenant-id: ${{ secrets.AZURE_TENANTID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}      
+
+      - name: Deploy state bucket
+        run: |
+          az group create \
+            -l ${{ env.TF_STATE_LOCATION }} \
+            -n ${{ env.TF_STATE_RG }}
+          az storage account create \
+            -n ${{ env.TF_STATE_STORAGE }} \
+            -g ${{ env.TF_STATE_RG }} \
+            -l ${{ env.TF_STATE_LOCATION }} \
+            --sku Standard_LRS \
+            --allow-blob-public-access false
+          az storage container create \
+            --name tfstate \
+            --account-name ${{ env.TF_STATE_STORAGE }}
+
+            
+  terraform-apply:
+    needs: [deploy-terraform-infra]
+    name: 'Terraform Apply'
+    runs-on: ubuntu-latest
+      
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    # Install the latest version of the Terraform CLI
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_wrapper: false
+
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform init
+      working-directory: './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/terraform'
+      run: terraform init
+     
+    # Terraform Apply
+    - name: Terraform Apply
+      working-directory: './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/terraform'
+      run: terraform apply -auto-approve
+
+  build-and-deploy:
+    needs: [terraform-apply]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v4
+
+      - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: 'Resolve Project Dependencies Using Dotnet'
+        shell: bash
+        run: |
+          pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
+          dotnet build --configuration Release --output ./output
+          popd
+                
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENTID }}
+          tenant-id: ${{ secrets.AZURE_TENANTID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTIONID }}
+
+      - name: 'Run Azure Functions Action'
+        uses: Azure/functions-action@v1
+        id: fa
+        with:
+          app-name: 'nordicdemo-functionapp-terra2'
+          slot-name: 'production'
+          package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
+        
+
+4. Terraform
+
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 3.79.0"
+    }
+  }
+  backend "azurerm" {
+      resource_group_name  = "nordicdays-terra-state3"
+      storage_account_name = "nordicdaysterrastate3"
+      container_name       = "tfstate"
+      key                  = "terraform.tfstate"
+      use_oidc             = true
+  }
+
+}
+
+provider "azurerm" {
+  features {}
+  use_oidc = true
+}
+
+data "azurerm_client_config" "current" {}
+
+# ----------------------- Resource Group ------------------------ 
+
+resource "azurerm_resource_group" "resource_group" {
+  name     = "nordicdays-demo-terra2"
+  location = "North Europe"
+  tags = { "Env" = "NonProd" }
+}
+
+# ----------------------- Storage ------------------------ 
+
+resource "azurerm_storage_account" "storage" {
+  name                     = "nordicdemostorageterra2"
+  resource_group_name      = azurerm_resource_group.resource_group.name
+  location                 = azurerm_resource_group.resource_group.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+# ----------------------- App Service Plan ------------------------ 
+
+resource "azurerm_service_plan" "plan" {
+  name                = "nordicdaysdemo-plan-terra2"
+  location            = azurerm_resource_group.resource_group.location
+  resource_group_name = azurerm_resource_group.resource_group.name
+  os_type             = "Linux"
+  sku_name            = "S1"
+}
+
+# ----------------------- Service Bus ------------------------ 
+
+resource "azurerm_servicebus_namespace" "servicebus" {
+  name                = "nordicdaysdemo-sb-terra2"
+  location            = azurerm_resource_group.resource_group.location
+  resource_group_name = azurerm_resource_group.resource_group.name
+  sku                 = "Standard"
+}
+
+resource "azurerm_servicebus_queue" "unzip_queue" {
+  name         = "blob-unzip"
+  namespace_id = azurerm_servicebus_namespace.servicebus.id
+}
+
+resource "azurerm_servicebus_queue" "log_analysis_queue" {
+  name         = "log-analysis"
+  namespace_id = azurerm_servicebus_namespace.servicebus.id
+}
+
+resource "azurerm_servicebus_namespace_authorization_rule" "functionapp-listen" {
+  name         = "functionapp_auth_rule"
+  namespace_id = azurerm_servicebus_namespace.servicebus.id
+
+  listen = true
+  send   = true
+  manage = false
+}
+
+# ----------------------- Application Insights ------------------------ 
+
+resource "azurerm_application_insights" "app-insights" {
+  application_type    = "web"
+  location            = azurerm_resource_group.resource_group.location
+  name                = "nordicdemo-appinsights-terra2"
+  resource_group_name = azurerm_resource_group.resource_group.name
+}
+
+# ----------------------- Function App ------------------------ 
+
+resource "azurerm_linux_function_app" "nordicdaysdemo-functionapp-terra" {
+  resource_group_name = azurerm_resource_group.resource_group.name
+  service_plan_id     = azurerm_service_plan.plan.id
+  location            = azurerm_resource_group.resource_group.location
+
+  storage_account_name       = azurerm_storage_account.storage.name
+  storage_account_access_key = azurerm_storage_account.storage.primary_access_key
+  name                       = "nordicdemo-functionapp-terra2"
+
+  site_config {
+    application_stack {
+      dotnet_version = "6.0"
+    }
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }  
+
+  app_settings = {
+    "FUNCTIONS_EXTENSION_VERSION"           = "~4"
+    "FUNCTIONS_WORKER_RUNTIME"              = "dotnet"
+    "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.app-insights.connection_string
+    "AzureWebJobsStorage"                   = azurerm_storage_account.storage.primary_connection_string
+    "ServiceBusConnection"                  = azurerm_servicebus_namespace_authorization_rule.functionapp-listen.primary_connection_string
+  }
+}
