@@ -64,7 +64,7 @@ resource "azurerm_servicebus_queue" "unzip_queue" {
   namespace_id = azurerm_servicebus_namespace.servicebus.id
 }
 
-resource "azurerm_servicebus_queue" "unzip_queue" {
+resource "azurerm_servicebus_queue" "log_analysis_queue" {
   name         = "log-analysis"
   namespace_id = azurerm_servicebus_namespace.servicebus.id
 }
