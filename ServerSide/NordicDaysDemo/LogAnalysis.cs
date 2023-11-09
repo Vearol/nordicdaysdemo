@@ -1,11 +1,9 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
-using Azure.Identity;
-using Azure.Security.KeyVault.Secrets;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using Microsoft.Azure.Cosmos;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 
@@ -15,15 +13,16 @@ namespace NordicDaysDemo
     {
         public string ContainerId { get; set; }
         public string BlobName { get; set; }
-        public int PartitionKey { get; set; }
     }
 
     public class LogAnalysis
     {
         [FunctionName("LogAnalysis")]
-        public async Task Run([QueueTrigger("log-analysis", Connection = "AzureWebJobsStorage")] LogAnalysisMessage logAnalysisMessage, 
+        public async Task Run([ServiceBusTrigger("log-analysis", Connection = "ServiceBusConnection")] string myQueueItem, 
             ILogger log)
         {
+            var logAnalysisMessage = JsonSerializer.Deserialize<LogAnalysisMessage>(myQueueItem);
+
             var storageConnectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
 
             var blobServiceClient = new BlobServiceClient(storageConnectionString);
@@ -60,25 +59,6 @@ namespace NordicDaysDemo
 
                 log.Log(LogLevel.Information, "upload completed");
             }
-
-            var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
-            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
-            var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
-            var dbConnectionString = (await client.GetSecretAsync("database-key")).Value.Value;
-
-            var cosmosClient = new CosmosClient(dbConnectionString, new CosmosClientOptions()
-            {
-                ApplicationRegion = Regions.NorthEurope,
-            });
-
-            var container = cosmosClient.GetContainer("reports_metadata", "reports");
-
-            var report = (await container.ReadItemAsync<Report>(id: logAnalysisMessage.ContainerId,
-                partitionKey: new PartitionKey(logAnalysisMessage.PartitionKey))).Resource;
-
-            report.Status = ReportStatus.Analyzed;
-
-            await container.ReplaceItemAsync(report, report.id, partitionKey: new PartitionKey(report.CreationDay));
         }
     }
 }

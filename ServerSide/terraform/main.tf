@@ -6,8 +6,8 @@ terraform {
     }
   }
   backend "azurerm" {
-      resource_group_name  = "nordicdays-terra-state"
-      storage_account_name = "nordicdaysterrastate"
+      resource_group_name  = "nordicdays-terra-state2"
+      storage_account_name = "nordicdaysterrastate2"
       container_name       = "tfstate"
       key                  = "terraform.tfstate"
       use_oidc             = true
@@ -50,99 +50,6 @@ resource "azurerm_service_plan" "plan" {
   sku_name            = "S1"
 }
 
-# ----------------------- Cosmos Db ------------------------ 
-
-resource "azurerm_cosmosdb_account" "db_account" {
-  name                = "nordicdaysdemo-db-terra2"
-  location            = azurerm_resource_group.resource_group.location
-  resource_group_name = azurerm_resource_group.resource_group.name
-  offer_type          = "Standard"
-  kind                = "GlobalDocumentDB"
-
-  consistency_policy {
-    consistency_level       = "Session"
-    max_interval_in_seconds = 5
-    max_staleness_prefix    = 100
-  }
-
-  geo_location {
-    location          = azurerm_resource_group.resource_group.location
-    failover_priority = 0
-  }
-}
-
-resource "azurerm_cosmosdb_sql_database" "database" {
-  name                = "reports_metadata"
-  resource_group_name = azurerm_resource_group.resource_group.name
-  account_name        = azurerm_cosmosdb_account.db_account.name
-}
-
-resource "azurerm_cosmosdb_sql_container" "db_container" {
-  name                  = "reports"
-  resource_group_name   = azurerm_resource_group.resource_group.name
-  account_name          = azurerm_cosmosdb_account.db_account.name
-  database_name         = azurerm_cosmosdb_sql_database.database.name
-  partition_key_path    = "/CreationDay"
-  partition_key_version = 1
-  throughput            = 400
-
-  conflict_resolution_policy {
-    mode                     = "LastWriterWins"
-    conflict_resolution_path = "/_ts"
-  }
-
-  indexing_policy {
-    indexing_mode = "consistent"
-
-    included_path {
-      path = "/*"
-    }
-
-    excluded_path {
-      path = "/\"_etag\"/?"
-    }
-  }
-}
-
-# ----------------------- Key Vault ------------------------ 
-
-resource "azurerm_key_vault" "keyvault" {
-  name                        = "nordicdaysdemo-kv-terra2"
-  location                    = azurerm_resource_group.resource_group.location
-  resource_group_name         = azurerm_resource_group.resource_group.name
-  enabled_for_disk_encryption = true
-  tenant_id                   = data.azurerm_client_config.current.tenant_id
-  soft_delete_retention_days  = 7
-  purge_protection_enabled    = false
-  sku_name = "standard"
-}
-
-resource "azurerm_key_vault_access_policy" "functionapp-access-policy" {
-  key_vault_id = azurerm_key_vault.keyvault.id
-  tenant_id    = data.azurerm_client_config.current.tenant_id
-  object_id    = azurerm_linux_function_app.nordicdaysdemo-functionapp-terra.identity[0].principal_id
-
-  secret_permissions = [
-    "Get"
-  ]
-}
-
-resource "azurerm_key_vault_access_policy" "deploy-access-policy" {
-  key_vault_id = azurerm_key_vault.keyvault.id
-  tenant_id    = data.azurerm_client_config.current.tenant_id
-  object_id    = data.azurerm_client_config.current.object_id
-
-  secret_permissions = [
-    "Get", "Set", "List", "Delete", "Recover", "Restore"
-  ]
-}
-
-resource "azurerm_key_vault_secret" "database_key" {
-  name         = "database-key"
-  value        = azurerm_cosmosdb_account.db_account.primary_sql_connection_string
-  key_vault_id = azurerm_key_vault.keyvault.id
-}
-
 # ----------------------- Service Bus ------------------------ 
 
 resource "azurerm_servicebus_namespace" "servicebus" {
@@ -154,6 +61,11 @@ resource "azurerm_servicebus_namespace" "servicebus" {
 
 resource "azurerm_servicebus_queue" "unzip_queue" {
   name         = "blob-unzip"
+  namespace_id = azurerm_servicebus_namespace.servicebus.id
+}
+
+resource "azurerm_servicebus_queue" "unzip_queue" {
+  name         = "log-analysis"
   namespace_id = azurerm_servicebus_namespace.servicebus.id
 }
 
@@ -201,7 +113,6 @@ resource "azurerm_linux_function_app" "nordicdaysdemo-functionapp-terra" {
     "FUNCTIONS_WORKER_RUNTIME"              = "dotnet"
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.app-insights.connection_string
     "AzureWebJobsStorage"                   = azurerm_storage_account.storage.primary_connection_string
-    "KeyVaultName"                          = azurerm_key_vault.keyvault.name
     "ServiceBusConnection"                  = azurerm_servicebus_namespace_authorization_rule.functionapp-listen.primary_connection_string
   }
 }

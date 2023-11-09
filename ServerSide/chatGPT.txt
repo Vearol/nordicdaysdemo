@@ -1,0 +1,163 @@
+> write a code in c# that take a zip file from Azure Blob Storage container, unzips it and uploads unzipped content back in the same container, in a new directory
+
+using System;
+using System.IO;
+using System.IO.Compression;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Define your Azure Blob Storage connection string and container name
+        string connectionString = "your_connection_string";
+        string containerName = "your_container_name";
+        string blobName = "your_zip_file_name.zip";
+        string destinationDirectory = "unzipped"; // The directory where unzipped content will be stored
+
+        // Create a BlobServiceClient
+        BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
+
+        // Get a reference to the container
+        BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+
+        // Get a reference to the blob
+        BlobClient blobClient = containerClient.GetBlobClient(blobName);
+
+        // Download the blob to a MemoryStream
+        BlobDownloadInfo blobDownloadInfo = await blobClient.DownloadAsync();
+        using (MemoryStream memoryStream = new MemoryStream())
+        {
+            await blobDownloadInfo.Content.CopyToAsync(memoryStream);
+
+            // Create a temporary directory to unzip the content
+            string tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempDirectory);
+
+            // Unzip the content
+            using (ZipArchive zipArchive = new ZipArchive(memoryStream, ZipArchiveMode.Read))
+            {
+                foreach (ZipArchiveEntry entry in zipArchive.Entries)
+                {
+                    string destinationPath = Path.Combine(tempDirectory, destinationDirectory, entry.FullName);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+
+                    using (Stream entryStream = entry.Open())
+                    using (FileStream fileStream = new FileStream(destinationPath, FileMode.Create))
+                    {
+                        await entryStream.CopyToAsync(fileStream);
+                    }
+                }
+            }
+
+            // Upload unzipped content to the same container in a new directory
+            foreach (string filePath in Directory.GetFiles(Path.Combine(tempDirectory, destinationDirectory)))
+            {
+                string destinationBlobName = Path.Combine("new_directory", Path.GetFileName(filePath));
+                BlobClient destinationBlobClient = containerClient.GetBlobClient(destinationBlobName);
+                await using FileStream fs = File.OpenRead(filePath);
+                await destinationBlobClient.UploadAsync(fs, true);
+            }
+
+            // Clean up: Delete the temporary directory
+            Directory.Delete(tempDirectory, true);
+        }
+
+        Console.WriteLine("Unzipped content uploaded to the Azure Blob Storage container.");
+    }
+}
+---------------------------------------------------------------------------------------------------------------
+
+> write a code in c# where you read a file from azure blob storage line by line
+
+using System;
+using System.IO;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Define your Azure Blob Storage connection string and blob information
+        string connectionString = "your_connection_string";
+        string containerName = "your_container_name";
+        string blobName = "your_blob_name.txt"; // Replace with the name of your blob file
+
+        // Create a BlobServiceClient
+        BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
+
+        // Get a reference to the container
+        BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+
+        // Get a reference to the blob
+        BlobClient blobClient = containerClient.GetBlobClient(blobName);
+
+        // Download the blob to a stream
+        BlobDownloadInfo blobDownloadInfo = await blobClient.DownloadAsync();
+        Stream blobStream = blobDownloadInfo.Content;
+
+        // Read the blob content line by line
+        using (StreamReader reader = new StreamReader(blobStream))
+        {
+            string line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                Console.WriteLine(line); // Process each line as needed
+            }
+        }
+    }
+}
+-----------------------------------------------------------------------------------------------------------------
+
+> write a c# code that takes a list of string lines, and uploads it to azure blob storage as a new file
+
+using System;
+using System.Collections.Generic;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Define your Azure Blob Storage connection string, container name, and the list of string lines
+        string connectionString = "your_connection_string";
+        string containerName = "your_container_name";
+        List<string> lines = new List<string>
+        {
+            "Line 1",
+            "Line 2",
+            "Line 3",
+            // Add your lines here
+        };
+
+        // Create a BlobServiceClient
+        BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
+
+        // Get a reference to the container
+        BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+
+        // Define the name of the new blob file
+        string blobName = "new_blob_file.txt"; // Change the name as needed
+
+        // Upload the list of string lines as a new blob file
+        BlobClient blobClient = containerClient.GetBlobClient(blobName);
+
+        using (MemoryStream stream = new MemoryStream())
+        using (StreamWriter writer = new StreamWriter(stream))
+        {
+            foreach (string line in lines)
+            {
+                writer.WriteLine(line);
+            }
+            writer.Flush();
+            stream.Position = 0;
+
+            await blobClient.UploadAsync(stream, true);
+        }
+
+        Console.WriteLine("List of string lines uploaded to Azure Blob Storage as a new file.");
+    }
+}

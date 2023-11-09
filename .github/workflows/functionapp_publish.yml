@@ -15,14 +15,14 @@ permissions:
   pull-requests: write
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'ServerSide' # set this to the path to your web app project, defaults to the repository root
   DOTNET_VERSION: '6.0.x' # set this to the dotnet version to use
   ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENTID }}"
   ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTIONID }}"
   ARM_TENANT_ID: "${{ secrets.AZURE_TENANTID }}"
   TF_STATE_LOCATION: 'northeurope'
-  TF_STATE_RG: 'nordicdays-terra-state'
-  TF_STATE_STORAGE: 'nordicdaysterrastate'
+  TF_STATE_RG: 'nordicdays-terra-state2'
+  TF_STATE_STORAGE: 'nordicdaysterrastate2'
 
 jobs:
   deploy-terraform-infra:
@@ -77,12 +77,12 @@ jobs:
 
     # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
     - name: Terraform init
-      working-directory: terraform
+      working-directory: './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/terraform'
       run: terraform init
      
     # Terraform Apply
     - name: Terraform Apply
-      working-directory: terraform
+      working-directory: './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/terraform'
       run: terraform apply -auto-approve
 
   build-and-deploy:

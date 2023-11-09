@@ -4,15 +4,11 @@ using System.IO.Compression;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Azure.Identity;
-using Azure.Security.KeyVault.Secrets;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using Azure.Storage.Queues;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
-using System.Globalization;
-using Microsoft.Azure.Cosmos;
+using Azure.Messaging.ServiceBus;
 
 namespace NordicDaysDemo
 {
@@ -30,15 +26,13 @@ namespace NordicDaysDemo
         {
             var unzipMessage = JsonSerializer.Deserialize<UnzipMessage>(myQueueItem);
             
-            var report = await SaveCosmosDbDocument(unzipMessage.ContainerId);
+            var storageConnStr = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+            var blobStorageClient = new BlobServiceClient(storageConnStr);
+            var containerClient = blobStorageClient.GetBlobContainerClient(unzipMessage.ContainerId);
 
-            var connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
-
-            var blobServiceClient = new BlobServiceClient(connectionString);
-            var containerClient = blobServiceClient.GetBlobContainerClient(unzipMessage.ContainerId);
-
-            var queueClient = new QueueClient(connectionString, "log-analysis", new QueueClientOptions(){MessageEncoding = QueueMessageEncoding.Base64});
-            queueClient.CreateIfNotExists();
+            var serviceBusConnStr = Environment.GetEnvironmentVariable("ServiceBusConnection");
+            var serviceBusClient = new ServiceBusClient(serviceBusConnStr);
+            var queue = serviceBusClient.CreateSender("log-analysis");
 
             await foreach (var blobItem in containerClient.GetBlobsAsync())
             {
@@ -48,14 +42,14 @@ namespace NordicDaysDemo
 
                     foreach (var unzippedFile in unzippedFiles)
                     {
-                        await queueClient.SendMessageAsync(JsonSerializer.Serialize(new LogAnalysisMessage 
-                            { ContainerId = unzipMessage.ContainerId, BlobName = unzippedFile, PartitionKey = report.CreationDay}));
+                        await queue.SendMessageAsync(new ServiceBusMessage(JsonSerializer.Serialize(new LogAnalysisMessage
+                            { ContainerId = unzipMessage.ContainerId, BlobName = unzippedFile })));
                     }
                 }
                 else
                 {
-                    await queueClient.SendMessageAsync(JsonSerializer.Serialize(new LogAnalysisMessage
-                        { ContainerId = unzipMessage.ContainerId, BlobName = blobItem.Name, PartitionKey = report.CreationDay }));
+                    await queue.SendMessageAsync(new ServiceBusMessage(JsonSerializer.Serialize(new LogAnalysisMessage
+                        { ContainerId = unzipMessage.ContainerId, BlobName = blobItem.Name })));
                 }
             }
         }
@@ -104,53 +98,5 @@ namespace NordicDaysDemo
 
             return outputFiles;
         }
-
-        private async Task<Report> SaveCosmosDbDocument(string containerId)
-        {
-            var keyVaultName = Environment.GetEnvironmentVariable("KeyVaultName");
-            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
-            var client = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
-
-            var connectionString = (await client.GetSecretAsync("database-key")).Value.Value;
-
-            var cosmosClient = new CosmosClient(connectionString, new CosmosClientOptions()
-                {
-                    ApplicationRegion = Regions.NorthEurope,
-                });
-
-            var container = cosmosClient.GetContainer("reports_metadata", "reports");
-
-            var report = new Report() { id = containerId, Status = ReportStatus.Created, CreationDay = GetCreationDay() };
-
-            return await container.CreateItemAsync(
-                item: report,
-                partitionKey: new PartitionKey(report.CreationDay)
-            );
-        }
-
-        private int GetCreationDay()
-        {
-            var dateTime = DateTime.Now;
-            var calendar = CultureInfo.InvariantCulture.Calendar;
-
-            var year = calendar.GetYear(dateTime);
-            var month = calendar.GetMonth(dateTime);
-            var day = calendar.GetDayOfMonth(dateTime);
-            return year * 10000 + month * 100 + day; // YYYYMMDD
-        }
-    }
-
-    public enum ReportStatus
-    {
-        Unknown,
-        Created,
-        Analyzed
-    }
-
-    public class Report
-    {
-        public string id { get; set; }
-        public ReportStatus Status { get; set; }
-        public int CreationDay { get; set; }
     }
 }

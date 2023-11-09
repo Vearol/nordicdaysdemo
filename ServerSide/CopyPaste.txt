@@ -1,0 +1,149 @@
+Azure subscription:
+Azure free account
+https://azure.microsoft.com/en-us/pricing/offers/ms-azr-0044p/
+
+
+https://github.com/Vearol/nordicdaysdemo
+
+
+1. UnzipFunction
+
+public class UnzipBlobs
+    {
+        private string _destinationDirectory = "unzipped";
+
+        [FunctionName("UnzipBlobs")]
+        public async Task Run([ServiceBusTrigger("blob-unzip", Connection = "ServiceBusConnection")]string myQueueItem, ILogger log)
+        {
+            var unzipMessage = JsonSerializer.Deserialize<UnzipMessage>(myQueueItem);
+            
+            var storageConnStr = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+            var blobStorageClient = new BlobServiceClient(storageConnStr);
+            var containerClient = blobStorageClient.GetBlobContainerClient(unzipMessage.ContainerId);
+
+            var serviceBusConnStr = Environment.GetEnvironmentVariable("ServiceBusConnection");
+            var serviceBusClient = new ServiceBusClient(serviceBusConnStr);
+            var queue = serviceBusClient.CreateSender("log-analysis");
+
+            await foreach (var blobItem in containerClient.GetBlobsAsync())
+            {
+                if (blobItem.Name.EndsWith(".zip"))
+                {
+                    var unzippedFiles = await UnzipAndUploadBlob(containerClient, blobItem.Name);
+
+                    foreach (var unzippedFile in unzippedFiles)
+                    {
+                        await queue.SendMessageAsync(new ServiceBusMessage(JsonSerializer.Serialize(new LogAnalysisMessage
+                            { ContainerId = unzipMessage.ContainerId, BlobName = unzippedFile })));
+                    }
+                }
+                else
+                {
+                    await queue.SendMessageAsync(new ServiceBusMessage(JsonSerializer.Serialize(new LogAnalysisMessage
+                        { ContainerId = unzipMessage.ContainerId, BlobName = blobItem.Name })));
+                }
+            }
+        }
+
+        private async Task<List<string>> UnzipAndUploadBlob(BlobContainerClient containerClient, string blobName)
+        {
+            var blobClient = containerClient.GetBlobClient(blobName);
+
+            BlobDownloadInfo blobDownloadInfo = await blobClient.DownloadAsync();
+            using var memoryStream = new MemoryStream();
+            await blobDownloadInfo.Content.CopyToAsync(memoryStream);
+
+            // Create a temporary directory to unzip the content
+            var tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempDirectory);
+
+            // Unzip the content
+            using (var zipArchive = new ZipArchive(memoryStream, ZipArchiveMode.Read))
+            {
+                foreach (var entry in zipArchive.Entries)
+                {
+                    var destinationPath = Path.Combine(tempDirectory, _destinationDirectory, entry.FullName);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+
+                    await using var entryStream = entry.Open();
+                    await using var fileStream = new FileStream(destinationPath, FileMode.Create);
+                    await entryStream.CopyToAsync(fileStream);
+                }
+            }
+
+            var outputFiles = new List<string>();
+
+            // Upload unzipped content to the same container in a new directory
+            foreach (var filePath in Directory.GetFiles(Path.Combine(tempDirectory, _destinationDirectory)))
+            {
+                var destinationBlobName = $"{_destinationDirectory}/{Path.GetFileName(filePath)}";
+                var destinationBlobClient = containerClient.GetBlobClient(destinationBlobName);
+                await using var fs = File.OpenRead(filePath);
+                await destinationBlobClient.UploadAsync(fs, true);
+
+                outputFiles.Add(destinationBlobName);
+            }
+
+            // Clean up: Delete the temporary directory
+            Directory.Delete(tempDirectory, true);
+
+            return outputFiles;
+        }
+    }
+
+
+2. Log analysis
+
+public class LogAnalysisMessage
+    {
+        public string ContainerId { get; set; }
+        public string BlobName { get; set; }
+    }
+
+    public class LogAnalysis
+    {
+        [FunctionName("LogAnalysis")]
+        public async Task Run([ServiceBusTrigger("log-analysis", Connection = "ServiceBusConnection")] string myQueueItem, 
+            ILogger log)
+        {
+            var logAnalysisMessage = JsonSerializer.Deserialize<LogAnalysisMessage>(myQueueItem);
+
+            var storageConnectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+
+            var blobServiceClient = new BlobServiceClient(storageConnectionString);
+            var containerClient = blobServiceClient.GetBlobContainerClient(logAnalysisMessage.ContainerId);
+
+            log.Log(LogLevel.Information, $"blob name: {logAnalysisMessage.BlobName}");
+
+            var blobClient = containerClient.GetBlobClient(logAnalysisMessage.BlobName);
+
+            // Download the blob to a stream
+            BlobDownloadInfo blobDownloadInfo = await blobClient.DownloadAsync();
+            var blobStream = blobDownloadInfo.Content;
+
+            // Read the blob content line by line
+            using var reader = new StreamReader(blobStream);
+            string line;
+
+            var resultBlobClient = containerClient.GetBlobClient("log-analysis-result.txt");
+
+            using (var stream = new MemoryStream())
+            using (var writer = new StreamWriter(stream))
+            {
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (line.Contains("error", StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        writer.WriteLine(line);
+                    }
+                }
+                writer.Flush();
+                stream.Position = 0;
+
+                await resultBlobClient.UploadAsync(stream, true);
+
+                log.Log(LogLevel.Information, "upload completed");
+            }
+        }
+    }
+
