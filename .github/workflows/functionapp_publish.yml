@@ -21,8 +21,8 @@ env:
   ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTIONID }}"
   ARM_TENANT_ID: "${{ secrets.AZURE_TENANTID }}"
   TF_STATE_LOCATION: 'northeurope'
-  TF_STATE_RG: 'nordicdays-terra-state2'
-  TF_STATE_STORAGE: 'nordicdaysterrastate2'
+  TF_STATE_RG: 'nordicdays-terra-state3'
+  TF_STATE_STORAGE: 'nordicdaysterrastate3'
 
 jobs:
   deploy-terraform-infra:
